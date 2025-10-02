@@ -7,6 +7,12 @@ editor: visual
 
 ## 
 
+```{r}
+timestamp_text <- format(Sys.time(), "Arquivo compilado em %d de %B de %Y, às %H:%M:%S")
+
+cat(paste0(timestamp_text))
+```
+
 ```{python}
 import polars as pl
 ```
