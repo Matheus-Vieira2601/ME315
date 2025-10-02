@@ -1,0 +1,194 @@
+---
+title: "SQLite-Parte1"
+author: "Matheus Vieira - RA 195245"
+format: html
+editor: visual
+---
+
+## Running Code
+
+```{r, message=FALSE, warning=FALSE}
+# Carregamento dos pacotes necessários
+suppressPackageStartupMessages(library(RSQLite))
+suppressPackageStartupMessages(library(tidyverse))
+
+# Define o espelho (servidor) do CRAN para baixar pacotes, se necessário.
+options(repos = c(CRAN = "[https://cran.rstudio.com/](https://cran.rstudio.com/)"))
+```
+
+```{r}
+# --- Exercício 1: Definir caminho e nome do arquivo ---
+
+# Define a pasta onde o arquivo está. Neste caso, a mesma pasta do arquivo R
+path <- "." 
+# Combina o caminho com o nome do arquivo.
+fname <- file.path(path, "disco.db")
+
+if (!file.exists(fname)) {
+  stop("Arquivo 'disco.db' não encontrado. Verifique se ele está na mesma pasta que o seu arquivo .qmd.")
+}
+cat("--- Exercício 1: Concluído ---\n")
+```
+
+```{r}
+# --- Exercício 2: Conectar ao banco de dados ---
+conn <- dbConnect(SQLite(), fname)
+cat("--- Exercício 2: Conectado ao banco de dados ---\n")
+```
+
+```{r}
+# --- Exercício 3: Listar as tabelas ---
+cat("\n--- Exercício 3: Tabelas no banco de dados ---\n")
+print(dbListTables(conn))
+```
+
+```{r}
+# --- Exercício 4: Identificar colunas da tabela 'customers' ---
+cat("\n--- Exercício 4: Colunas na tabela 'customers' ---\n")
+print(dbListFields(conn, "customers"))
+```
+
+```{r}
+# --- Exercício 5: Identificar quantos clientes estão cadastrados ---
+cat("\n--- Exercício 5: Número total de clientes ---\n")
+sql_total_clientes <- "SELECT COUNT(CustomerId) AS TotalClientes FROM customers"
+total_clientes <- dbGetQuery(conn, sql_total_clientes)
+print(total_clientes)
+```
+
+```{r}
+# --- Exercício 6: Identificar o número de países diferentes ---
+cat("\n--- Exercício 6: Número de países distintos ---\n")
+sql_paises_distintos <- "SELECT COUNT(DISTINCT Country) AS PaisesDistintos FROM customers"
+paises_distintos <- dbGetQuery(conn, sql_paises_distintos)
+print(paises_distintos)
+```
+
+```{r}
+# --- Exercício 7: Quantos clientes existem por país ---
+cat("\n--- Exercício 7: Contagem de clientes por país (ordem decrescente) ---\n")
+sql_clientes_por_pais <- "SELECT Country, COUNT(CustomerId) AS NumeroDeClientes
+                          FROM customers
+                          GROUP BY Country
+                          ORDER BY NumeroDeClientes DESC"
+clientes_por_pais <- dbGetQuery(conn, sql_clientes_por_pais)
+print(clientes_por_pais)
+```
+
+```{r}
+# --- Exercício 8: Quais são os 5 países com mais clientes registrados ---
+cat("\n--- Exercício 8: Top 5 países com mais clientes ---\n")
+sql_top5_paises <- "SELECT Country, COUNT(CustomerId) AS NumeroDeClientes
+                    FROM customers
+                    GROUP BY Country
+                    ORDER BY NumeroDeClientes DESC
+                    LIMIT 5"
+top5_paises <- dbGetQuery(conn, sql_top5_paises)
+print(top5_paises)
+```
+
+```{r}
+# --- Exercício 9: Quais são os países registrados que possuem apenas 6 letras no nome ---
+cat("\n--- Exercício 9: Países com 6 letras no nome ---\n")
+# Usamos a função LENGTH() do SQL para contar os caracteres.
+sql_paises_6_letras <- "SELECT DISTINCT Country FROM customers WHERE LENGTH(Country) = 6"
+paises_6_letras <- dbGetQuery(conn, sql_paises_6_letras)
+print(paises_6_letras)
+```
+
+```{r}
+# --- Exercício 10: Quais foram as músicas compradas por clientes brasileiros ---
+cat("\n--- Exercício 10: Músicas compradas por clientes do Brasil ---\n")
+sql_musicas_brasil <- "SELECT t.Name AS NomeDaMusica
+                       FROM customers AS c
+                       INNER JOIN invoices AS i ON c.CustomerId = i.CustomerId
+                       INNER JOIN invoice_items AS ii ON i.InvoiceId = ii.InvoiceId
+                       INNER JOIN tracks AS t ON ii.TrackId = t.TrackId
+                       WHERE c.Country = 'Brazil'"
+musicas_brasil <- dbGetQuery(conn, sql_musicas_brasil)
+print(head(musicas_brasil))
+```
+
+```{r}
+# 1. Qual o álbum mais tocado por país?
+cat("\n--- Álbum mais tocado por país ---\n")
+
+# A consulta abaixo é uma cópia da consulta de artista,
+# mas adaptada para agrupar por Álbum (al.Title) em vez de Artista.
+sql_album_por_pais <- "
+WITH VendasPorAlbum AS (
+    SELECT
+        c.Country,
+        al.Title AS Album,
+        COUNT(t.TrackId) AS NumeroDeFaixas
+    FROM customers AS c
+    JOIN invoices AS i ON c.CustomerId = i.CustomerId
+    JOIN invoice_items AS ii ON i.InvoiceId = ii.InvoiceId
+    JOIN tracks AS t ON ii.TrackId = t.TrackId
+    JOIN albums AS al ON t.AlbumId = al.AlbumId
+    GROUP BY c.Country, al.Title
+),
+Ranking AS (
+    SELECT
+        Country,
+        Album,
+        NumeroDeFaixas,
+        ROW_NUMBER() OVER(PARTITION BY Country ORDER BY NumeroDeFaixas DESC) as rn
+    FROM VendasPorAlbum
+)
+SELECT
+    Country,
+    Album,
+    NumeroDeFaixas
+FROM Ranking
+WHERE rn = 1
+ORDER BY Country;"
+
+album_por_pais <- dbGetQuery(conn, sql_album_por_pais)
+print(album_por_pais)
+```
+
+```{r}
+# 2. Qual o artista mais tocado por país?
+cat("\n--- Artista mais tocado por país ---\n")
+
+sql_artista_por_pais <- "
+/* A lógica é a mesma do anterior, mas agora agrupamos pelo nome do artista */
+WITH VendasPorArtista AS (
+    SELECT
+        c.Country,
+        ar.Name AS Artista,
+        COUNT(t.TrackId) AS NumeroDeFaixas
+    FROM customers AS c
+    JOIN invoices AS i ON c.CustomerId = i.CustomerId
+    JOIN invoice_items AS ii ON i.InvoiceId = ii.InvoiceId
+    JOIN tracks AS t ON ii.TrackId = t.TrackId
+    JOIN albums AS al ON t.AlbumId = al.AlbumId
+    JOIN artists AS ar ON al.ArtistId = ar.ArtistId
+    GROUP BY c.Country, ar.Name
+),
+Ranking AS (
+    SELECT
+        Country,
+        Artista,
+        NumeroDeFaixas,
+        ROW_NUMBER() OVER(PARTITION BY Country ORDER BY NumeroDeFaixas DESC) as rn
+    FROM VendasPorArtista
+)
+SELECT
+    Country,
+    Artista,
+    NumeroDeFaixas
+FROM Ranking
+WHERE rn = 1
+ORDER BY Country;"
+
+artista_por_pais <- dbGetQuery(conn, sql_artista_por_pais)
+print(artista_por_pais)
+```
+
+```{r}
+# --- Exercício 11: Desconectar do banco de dados ---
+dbDisconnect(conn)
+cat("\n--- Exercício 11: Conexão com o banco de dados fechada ---\n")
+```
