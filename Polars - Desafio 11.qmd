@@ -1,0 +1,189 @@
+---
+title: "Desafio 11"
+author: "Matheus Vieira - 195245"
+format: html
+editor: visual
+---
+
+## Desafio 11
+
+```{r}
+# Pega a hora e data atuais do sistema
+timestamp_atual <- Sys.time()
+
+# Formata a data e hora em um texto amigável em português
+texto_formatado <- format(timestamp_atual, "Arquivo compilado em %d de %B de %Y, às %H:%M:%S")
+
+# Imprime o texto formatado em itálico para um visual mais discreto
+cat(paste0(texto_formatado))
+```
+
+```{r, warning=FALSE}
+library(reticulate)
+library(here)
+
+use_virtualenv("~/.virtualenvs/r-reticulate")
+
+# Cria o caminho completo para o arquivo
+caminho_arquivo_r <- here("dados", "renda_adulta.csv.gz")
+```
+
+1 - Utilizando o arquivo renda_adulta.csv e sabendo que ele não possui cabeçalho, faça a importação do banco de dados utilizando os nomes das colunas conforme apresentado acima e na sequência ali indicada. No momento da importação do arquivo, você deve, também, indicar os tipos de cada uma das colunas. Utilize o fato de que o símbolo ? representa valores faltantes.
+
+```{python}
+# Importa as bibliotecas Python necessárias
+import polars as pl
+import os
+
+# --- Configuração dos Dados ---
+colunas = [
+    "age", "workclass", "fnlwgt", "education", "education-num",
+    "marital-status", "occupation", "relationship", "race", "sex",
+    "capital-gain", "capital-loss", "hours-per-week", "native-country", "income"
+]
+tipos_de_dados = {
+    "age": pl.Int64, "workclass": pl.Utf8, "fnlwgt": pl.Int64,
+    "education": pl.Utf8, "education-num": pl.Int64, "marital-status": pl.Utf8,
+    "occupation": pl.Utf8, "relationship": pl.Utf8, "race": pl.Utf8,
+    "sex": pl.Utf8, "capital-gain": pl.Int64, "capital-loss": pl.Int64,
+    "hours-per-week": pl.Int64, "native-country": pl.Utf8, "income": pl.Utf8
+}
+
+# --- ETAPA PYTHON ---
+# Acessamos a variável 'caminho_arquivo_r' que foi criada no R.
+# O objeto 'r' é a ponte que o reticulate cria.
+caminho_arquivo = r.caminho_arquivo_r
+
+# Verifica se o arquivo existe antes de tentar ler
+if not os.path.exists(caminho_arquivo):
+    print(f"Erro: Arquivo não encontrado em '{caminho_arquivo}'")
+else:
+    # Lê o arquivo .csv.gz diretamente com Polars
+    df = pl.read_csv(
+        caminho_arquivo,
+        has_header=False,
+        new_columns=colunas,
+        schema_overrides=tipos_de_dados, # Usando o nome correto do argumento
+        null_values="?"
+    )
+
+    print("Arquivo importado com sucesso! Visualizando as 5 primeiras linhas:")
+    print(df.head())
+```
+
+2 - Apresente os tipos de cada uma das coluna.
+
+```{python}
+print(df.schema)
+```
+
+3 - Apresente as dimensões da tabela de dados.
+
+```{python}
+print(df.shape)
+```
+
+4 - Quantas pessoas recebem acima de \$50.000 e quantas pessoas recebem abaixo deste limiar?
+
+```{python}
+contagem_renda = df.group_by("income").len()
+
+print(contagem_renda)
+```
+
+5 - Crie um objeto chamado `renda_longo`, no qual você transforma as colunas `capital-gain` e `capital-loss` (formato *wide*) para formato longo. Os valores destas variáveis devem ser armazenados numa nova coluna chamada `Valor` e os tipos de valores (*gain* e *loss*) devem ser armazenados numa coluna chamada `tipo`.
+
+```{python}
+renda_longo = df.unpivot(
+    index=[col for col in df.columns if col not in ["capital-gain", "capital-loss"]],
+    on=["capital-gain", "capital-loss"],
+    variable_name="tipo",
+    value_name="Valor"
+)
+
+print("Transformação concluída. Visualizando as 5 primeiras linhas do novo objeto 'renda_longo':")
+print(renda_longo.head())
+
+print("\nDimensões do novo objeto (linhas, colunas):")
+print(renda_longo.shape)
+```
+
+6 - Quais são as médias de horas trabalhadas por classe salarial?
+
+```{python}
+media_horas_por_salario = df.group_by("income").agg(
+    pl.mean("hours-per-week").alias("media_horas_semanais")
+)
+
+print(media_horas_por_salario)
+```
+
+7 - Se cada linha representa uma pessoa, quantas pessoas foram amostradas em cada profissão?
+
+```{python}
+contagem_por_profissao = df.group_by("occupation").len().sort("len", descending=True)
+
+print(contagem_por_profissao)
+```
+
+8 - Crie um gráfico de barras que apresente o número médio de horas trabalhadas semanalmente em função do nível salarial.
+
+```{python}
+import plotly.express as px
+
+# 1. Recalcula a média de horas
+media_horas_por_salario = df.group_by("income").agg(
+    pl.mean("hours-per-week").alias("media_horas_semanais")
+)
+
+# 2. Converte o DataFrame do Polars para Pandas
+df_para_plot = media_horas_por_salario.to_pandas()
+
+# 3. Cria o gráfico de barras com cores personalizadas
+fig = px.bar(
+    df_para_plot,
+    x="income",
+    y="media_horas_semanais",
+    title="Média de Horas Trabalhadas por Semana por Nível Salarial",
+    labels={"income": "Nível Salarial", "media_horas_semanais": "Média de Horas por Semana"},
+    text_auto=True,
+    # --- CORREÇÃO APLICADA AQUI ---
+    color="income",  # Mapeia a coluna 'income' para a cor das barras
+    color_discrete_sequence=["navy", "crimson"] 
+)
+
+# 4. Exibe o gráfico
+fig.show()
+
+print("\nGráfico gerado com sucesso e com cores diferentes!")
+```
+
+9 - **Desafio**: existe alguma evidência de discriminação salarial entre gêneros biológicos?
+
+```{python}
+# Calcula o total de pessoas e o total de pessoas com alta renda, agrupando por gênero.
+contagem_total_genero = df.group_by("sex").len().rename({"len": "total_pessoas"})
+contagem_alto_salario = df.filter(pl.col("income") == ">50K").group_by("sex").len().rename({"len": "pessoas_com_salario_alto"})
+
+# Junta as tabelas e calcula a porcentagem de alta renda para cada gênero.
+analise_genero_df = contagem_total_genero.join(contagem_alto_salario, on="sex")
+analise_final_df = analise_genero_df.with_columns(
+    (pl.col("pessoas_com_salario_alto") / pl.col("total_pessoas") * 100).round(2).alias("porcentagem_salario_alto")
+)
+
+# Exibe a tabela final da análise.
+print("--- Análise de Renda por Gênero ---")
+print(analise_final_df)
+
+# Extrai os valores de porcentagem para usar no texto da conclusão.
+porcentagem_homens = analise_final_df.filter(pl.col("sex") == "Male").select("porcentagem_salario_alto").item()
+porcentagem_mulheres = analise_final_df.filter(pl.col("sex") == "Female").select("porcentagem_salario_alto").item()
+
+# Imprime uma conclusão dinâmica com os resultados calculados.
+print("\n--- Conclusão do Desafio ---")
+print(
+    f"Com base nos dados, uma porcentagem significativamente maior de homens (aprox. {porcentagem_homens}%) "
+    f"atinge a faixa de renda '>50K' em comparação com as mulheres (aprox. {porcentagem_mulheres}%). "
+    f"Essa disparidade na proporção de altos salários é uma forte evidência de desigualdade salarial entre os gêneros nesta amostra."
+)
+```
