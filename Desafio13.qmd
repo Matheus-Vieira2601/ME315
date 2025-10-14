@@ -1,0 +1,212 @@
+---
+title: "Desafio13"
+author: "Matheus Vieira - 195245"
+format: html
+editor: visual
+---
+
+## Desafio 13
+
+```{r}
+library(DBI)
+library(RSQLite)
+library(readr)
+
+con <- dbConnect(RSQLite::SQLite(), "imdb.db")
+```
+
+```{r}
+# Define o nome do banco de dados e os caminhos dos arquivos de origem.
+db_path <- "imdb.db"
+basics_path     <- "dados/title.basics.tsv.gz"
+ratings_path    <- "dados/title.ratings.tsv.gz"
+principals_path <- "dados/title.principals.tsv.gz"
+
+# Cria o arquivo do banco de dados (se não existir) e estabelece a conexão.
+message("Conectando ao banco de dados SQLite...")
+con <- dbConnect(RSQLite::SQLite(), db_path)
+
+# --- Processamento da tabela 'basics' ---
+message("Processando 'basics'...")
+# Lê o TSV. 'na = "\\N"' é crucial para tratar valores nulos específicos do IMDb.
+basics_df <- read_tsv(basics_path, na = "\\N")
+dbWriteTable(con, "basics", basics_df, overwrite = TRUE)
+rm(basics_df) # Libera memória RAM removendo o dataframe após o uso.
+message("Tabela 'basics' criada.")
+
+# --- Processamento da tabela 'ratings' ---
+message("Processando 'ratings'...")
+ratings_df <- read_tsv(ratings_path, na = "\\N")
+dbWriteTable(con, "ratings", ratings_df, overwrite = TRUE)
+rm(ratings_df)
+message("Tabela 'ratings' criada.")
+
+# --- Processamento da tabela 'principals' ---
+message("Processando 'principals'...")
+principals_df <- read_tsv(principals_path, na = "\\N")
+dbWriteTable(con, "principals", principals_df, overwrite = TRUE)
+rm(principals_df)
+message("Tabela 'principals' criada.")
+
+# Verifica a criação das tabelas e fecha a conexão.
+message("\nVerificando tabelas no banco de dados:")
+print(dbListTables(con))
+dbDisconnect(con)
+message("\nProcesso concluído.")
+```
+
+```{r}
+# Carrega as bibliotecas para acesso ao banco de dados, manipulação de dados e formatação de tabelas.
+library(DBI)
+library(RSQLite)
+library(tidyverse)
+library(knitr)
+
+# Conecta ao banco de dados SQLite.
+db_path <- "imdb.db"
+con <- dbConnect(RSQLite::SQLite(), db_path)
+
+# Query SQL para extrair os gêneros de todos os filmes com nota média superior a 8.0.
+query_genres <- "
+SELECT
+    b.genres
+FROM
+    basics AS b
+INNER JOIN
+    ratings AS r ON b.tconst = r.tconst
+WHERE
+    b.titleType = 'movie' AND r.averageRating > 8.0;
+"
+
+# Executa a consulta e armazena o resultado em um dataframe.
+genres_df <- dbGetQuery(con, query_genres)
+dbDisconnect(con)
+
+# Usa o R para processar a lista de gêneros e encontrar o mais frequente.
+# A chave é a função separate_rows(), que transforma strings como "Action,Drama"
+# em linhas individuais, permitindo a contagem correta de cada gênero.
+genero_mais_comum <- genres_df %>%
+  filter(!is.na(genres)) %>%
+  separate_rows(genres, sep = ",") %>%
+  count(genres, name = "frequencia", sort = TRUE) %>%
+  head(1)
+
+# Apresenta o resultado final em uma tabela formatada.
+kable(genero_mais_comum, caption = "Gênero Mais Frequente em Filmes com Nota > 8")
+```
+
+```{r}
+# Carrega as bibliotecas necessárias.
+library(DBI)
+library(RSQLite)
+library(knitr)
+
+# Conecta ao banco de dados SQLite.
+db_path <- "imdb.db"
+con <- dbConnect(RSQLite::SQLite(), db_path)
+
+# Define a consulta 100% SQL.
+# A complexidade vem da necessidade de "separar" a coluna de gêneros (ex: "Action,Drama")
+# em múltiplas linhas, uma tarefa feita aqui com uma Expressão de Tabela Comum (CTE) Recursiva.
+query_genres_sql_only <- "
+/*
+  Etapa 1: CTE para selecionar apenas os gêneros dos filmes com nota > 8.0.
+  Isso cria uma tabela temporária e simplifica a consulta principal.
+*/
+WITH high_rated_movies AS (
+    SELECT genres
+    FROM basics b
+    JOIN ratings r ON b.tconst = r.tconst
+    WHERE b.titleType = 'movie' AND r.averageRating > 8.0 AND b.genres IS NOT NULL
+),
+/*
+  Etapa 2: CTE Recursiva ('split_genres') para dividir a string de gêneros.
+  A cada passo, um gênero é extraído e o restante da string é passado para a próxima iteração.
+*/
+split_genres(genre, remaining_genres) AS (
+    -- Caso base: lida com filmes de um ou múltiplos gêneros.
+    SELECT
+        -- Se existe vírgula, extrai o texto antes dela; senão, a string inteira.
+        CASE WHEN INSTR(genres, ',') > 0
+             THEN SUBSTR(genres, 1, INSTR(genres, ',') - 1)
+             ELSE genres
+        END,
+        -- Salva o restante da string para a próxima iteração.
+        SUBSTR(genres, INSTR(genres, ',') + 1)
+    FROM high_rated_movies
+
+    UNION ALL
+
+    -- Passo recursivo: opera sobre o restante da string ('remaining_genres') até ela se esgotar.
+    SELECT
+        CASE WHEN INSTR(remaining_genres, ',') > 0
+             THEN SUBSTR(remaining_genres, 1, INSTR(remaining_genres, ',') - 1)
+             ELSE remaining_genres
+        END,
+        SUBSTR(remaining_genres, INSTR(remaining_genres, ',') + 1)
+    FROM split_genres
+    WHERE INSTR(remaining_genres, ',') > 0
+)
+/*
+  Etapa 3: Com os gêneros agora em linhas individuais, agrupa e conta as ocorrências.
+*/
+SELECT
+    genre,
+    COUNT(*) as frequencia
+FROM split_genres
+GROUP BY genre
+ORDER BY frequencia DESC
+LIMIT 1;
+"
+
+# Executa a consulta e fecha a conexão com o banco.
+genero_mais_comum_sql <- dbGetQuery(con, query_genres_sql_only)
+dbDisconnect(con)
+
+# Apresenta o resultado final em uma tabela formatada.
+kable(genero_mais_comum_sql, caption = "Gênero Mais Frequente (Solução Pura SQL)")
+```
+
+```{r}
+# Carrega as bibliotecas necessárias.
+library(DBI)
+library(RSQLite)
+library(knitr)
+
+# Conecta ao banco de dados SQLite.
+db_path <- "imdb.db"
+con <- dbConnect(RSQLite::SQLite(), db_path)
+
+# Query SQL para encontrar os 3 atores/atrizes com mais participações
+# em filmes (titleType = 'movie') com nota média superior a 7.5.
+# Nota: A consulta retorna o ID ('nconst') pois a tabela 'names' não é utilizada.
+query_top_actors <- "
+SELECT
+    p.nconst, -- Identificador único do ator/atriz
+    COUNT(p.tconst) AS film_count
+FROM
+    ratings AS r
+-- Junta-se com 'basics' para filtrar e garantir que estamos lidando apenas com 'movie'.
+INNER JOIN
+    basics AS b ON r.tconst = b.tconst
+-- Junta-se com 'principals' para obter a lista de atores de cada filme.
+INNER JOIN
+    principals AS p ON r.tconst = p.tconst
+WHERE
+    b.titleType = 'movie'
+    AND r.averageRating > 7.5
+    AND p.category IN ('actor', 'actress') -- Filtra apenas para as categorias de atuação.
+GROUP BY
+    p.nconst -- Agrupa os resultados por ator para que a contagem funcione.
+ORDER BY
+    film_count DESC -- Ordena do maior para o menor.
+LIMIT 3;
+"
+
+# Executa a consulta e fecha a conexão com o banco.
+top_actors_ids <- dbGetQuery(con, query_top_actors)
+dbDisconnect(con)
+
+# Apresenta o resultado final em uma tabela formatada.
+kable(top_actors_ids, caption = "Top 3 Atores/Atrizes (por ID) em Filmes com Nota > 7.5")
+```
