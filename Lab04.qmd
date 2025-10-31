@@ -1,0 +1,206 @@
+---
+title: "Lab 4"
+author: "Matheus Vieira - 195245"
+format: html
+editor: visual
+---
+
+## Lab 04
+
+```{r}
+# Carrega os pacotes R necessários
+library(reticulate)
+library(here)
+
+# --- ETAPA R ---
+# Cria o caminho completo para o arquivo na pasta 'dados'
+caminho_arquivo_r <- here("dados", "diamonds.csv.gz")
+```
+
+```{python}
+import polars as pl
+import os
+
+# --- ETAPA PYTHON ---
+# Acessa a variável 'caminho_arquivo_r' que foi criada no R
+caminho_arquivo = r.caminho_arquivo_r
+
+# Verifica se o arquivo existe antes de tentar ler
+if not os.path.exists(caminho_arquivo):
+    print(f"Erro: Arquivo não encontrado em '{caminho_arquivo}'")
+else:
+    try:
+        # Lê o arquivo .csv.gz diretamente da pasta local
+        df_diamonds = pl.read_csv(caminho_arquivo)
+        
+        print(f"Arquivo '{os.path.basename(caminho_arquivo)}' importado com sucesso!")
+        
+        # Mostra as 5 primeiras linhas para confirmar
+        print(df_diamonds.head())
+        
+        # Mostra também os tipos de dados inferidos
+        print("\nTipos de dados inferidos:")
+        print(df_diamonds.schema)
+
+    except Exception as e:
+        print(f"Ocorreu um erro ao ler o arquivo: {e}")
+```
+
+```{python}
+import polars as pl
+import plotly.express as px
+
+# O comando assume que o DataFrame 'df_diamonds' já foi criado no chunk anterior.
+
+# --- Ação de Qualidade 1: Amostragem ---
+# O dataset é muito grande. Para evitar 'overplotting' e lentidão,
+# criamos uma amostra aleatória de 7.000 pontos.
+# Usamos 'shuffle=True' para garantir uma amostra não ordenada.
+df_sample = df_diamonds.sample(n=7000, shuffle=True)
+
+# Converte a amostra do Polars para Pandas, o formato ideal para o Plotly.
+df_plot = df_sample.to_pandas()
+
+# --- Ação de Qualidade 2: Criação do Gráfico ---
+fig = px.scatter(
+    df_plot,
+    x="carat",
+    y="price",
+    
+    # --- Ação de Qualidade 3: Transparência (Opacity) ---
+    # Define a opacidade como baixa (0.2) para ver a densidade dos pontos
+    # e identificar onde eles mais se concentram.
+    opacity=0.2,
+    
+    # --- Ação de Qualidade 4: Títulos e Rótulos Claros ---
+    title="Associação entre Peso (Carat) e Preço (Price) dos Diamantes",
+    labels={"carat": "Peso do Diamante (Carat)", "price": "Preço (em USD)"},
+    
+    # --- Ação de Qualidade 5: Informação Interativa ---
+    # Adiciona dados extras ao 'hover' (passar o mouse)
+    # para enriquecer a análise exploratória.
+    hover_data=['cut', 'color', 'clarity']
+)
+
+# Exibe o gráfico interativo
+fig.show()
+```
+
+Para garantir um gráfico de boa qualidade, tomei cinco ações principais para lidar com o grande volume de dados e melhorar a clareza:
+
+1. \*\*Amostragem Aleatória:\*\* O conjunto de dados original tem mais de 50.000 pontos. Plotar todos eles resultaria em um gráfico "borrado" e lento (problema de \*overplotting\*). Criei uma amostra aleatória de 7.000 pontos, que é grande o suficiente para revelar a tendência, mas limpa o suficiente para ser legível.
+2. \*\*Transparência (Opacidade):\*\* Defini a opacidade dos pontos para \`0.2\`. Isso permite ver a densidade dos dados, mostrando as áreas onde a concentração de diamantes é maior, algo que seria impossível de ver com pontos opacos.
+3. \*\*Rótulos Claros:\*\* O gráfico possui um título principal e rótulos nos eixos X e Y (\`Peso do Diamante (Carat)\` e \`Preço (em USD)\`) que o tornam autoexplicativo.
+4. \*\*Interatividade (Hover Data):\*\* Utilizei \`plotly\`, que é interativo. Configurei o gráfico para que, ao passar o mouse sobre um ponto, ele revele informações cruciais (\`cut\`, \`color\`, \`clarity\`). Isso permite uma exploração mais profunda, ajudando a entender \*por que\* dois diamantes com o mesmo peso podem ter preços tão diferentes.
+5. \*\*Ferramenta Adequada:\*\* Escolhi um gráfico de dispersão (\`scatter plot\`), que é a visualização padrão e mais eficaz para investigar a associação entre duas variáveis numéricas contínuas.
+
+### Comunicando os Achados
+
+O gráfico revela uma \*\*forte associação positiva e não-linear\*\* entre o peso (\`carat\`) e o preço (\`price\`) dos diamantes. Como esperado, quanto mais pesado o diamante, mais caro ele é. No entanto, essa relação parece ser exponencial: o preço aumenta em um ritmo muito mais acelerado após a marca de 1.0 quilate. Além disso, a visualização mostra que a variabilidade dos preços também aumenta com o peso; diamantes pequenos (abaixo de 0.5 quilates) têm preços muito similares entre si, enquanto diamantes grandes (acima de 2.0 quilates) apresentam uma enorme dispersão de preços. Essa variação em diamantes maiores é provavelmente explicada pelas outras variáveis de qualidade (corte, cor e clareza), que podem ser inspecionadas interativamente no gráfico.
+
+```{python}
+import polars as pl
+import plotly.express as px
+
+# O comando assume que o DataFrame 'df_diamonds' já foi criado.
+
+# --- Ação de Qualidade 1: Amostragem ---
+# Usamos a mesma amostra de 3.000 pontos para manter a clareza.
+df_sample = df_diamonds.sample(n=3000, shuffle=True)
+
+# --- Ação de Qualidade 2: Ordem Lógica ---
+# O corte ('cut') é uma variável ordinal. Definimos a ordem do pior ("Fair")
+# para o melhor ("Ideal") para que os gráficos sejam exibidos de forma lógica.
+ordem_dos_cortes = ["Fair", "Good", "Very Good", "Premium", "Ideal"]
+
+# Converte a amostra para Pandas.
+df_plot = df_sample.to_pandas()
+
+# --- Ação de Qualidade 3: Gráfico de Facetas ---
+# Criamos o gráfico de dispersão, mas usamos 'facet_col="cut"'
+# Isso cria um gráfico separado para cada tipo de corte.
+fig = px.scatter(
+    df_plot,
+    x="carat",
+    y="price",
+    opacity=0.3, # Um pouco mais de opacidade, já que os pontos estão mais espalhados
+    
+    # --- Ação Principal: Facet_col ---
+    # Separa a visualização em colunas, uma para cada valor de 'cut'.
+    facet_col="cut",
+    
+    # Aplica a ordem lógica que definimos.
+    category_orders={"cut": ordem_dos_cortes},
+    
+    title="Relação Carat vs. Price Dividida por Tipo de Corte",
+    labels={"carat": "Peso (Carat)", "price": "Preço (em USD)"}
+)
+
+# Exibe o gráfico interativo
+fig.show()
+
+print("\nGráfico de facetas gerado com sucesso!")
+```
+
+A visualização em facetas confirma que a relação positiva e não-linear entre o peso (`Carat`) e o preço (`Price`) existe de forma consistente em todos os cinco tipos de corte. No entanto, a inclinação dessa relação muda visivelmente com a qualidade. Para cortes de menor qualidade, como "Fair" e "Good", a curva de preço é visivelmente mais suave e os pontos são mais dispersos, indicando que o preço sobe mais lentamente com o aumento do peso. Em contraste direto, para cortes de alta qualidade como "Premium" e "Ideal", os pontos formam uma curva muito mais íngreme e definida. Isso demonstra que o preço escala de forma muito mais agressiva com o peso em diamantes de corte superior, sugerindo que a qualidade do corte atua como um multiplicador significativo no valor do diamante.
+
+```{python}
+import polars as pl
+import plotly.express as px
+
+# --- Etapa 1: Filtrar os dois grupos extremos ---
+
+# Define as piores características (ordens mais baixas)
+df_worst = df_diamonds.filter(
+    (pl.col("cut") == "Fair") &
+    (pl.col("color") == "J") &
+    (pl.col("clarity") == "I1")
+).with_columns(
+    # Cria um rótulo para a legenda
+    pl.lit("Pior Qualidade (Fair, J, I1)").alias("Configuração")
+)
+
+# Define as melhores características (ordens mais altas)
+df_best = df_diamonds.filter(
+    (pl.col("cut") == "Ideal") &
+    (pl.col("color") == "D") &
+    (pl.col("clarity") == "IF")
+).with_columns(
+    # Cria um rótulo para a legenda
+    pl.lit("Melhor Qualidade (Ideal, D, IF)").alias("Configuração")
+)
+
+# --- Etapa 2: Combinar os dois grupos ---
+# Juntamos os dois pequenos DataFrames em um só
+df_comparativo = pl.concat([df_best, df_worst])
+
+# Converte para Pandas para o Plotly
+df_plot = df_comparativo.to_pandas()
+
+# --- Etapa 3: Criar a Visualização Comparativa ---
+# Não precisamos de amostra ou transparência, pois são poucos pontos.
+fig = px.scatter(
+    df_plot,
+    x="carat",
+    y="price",
+    
+    # Desenha os dois grupos com cores diferentes no mesmo gráfico.
+    color="Configuração", 
+    
+    title="Relação Preço vs. Peso: Comparando Qualidade Extrema",
+    labels={"carat": "Peso (Carat)", "price": "Preço (em USD)"}
+)
+
+# Exibe o gráfico interativo
+fig.show()
+
+print(df_comparativo)
+```
+
+\### Quais foram as dificuldades encontradas?
+
+A principal dificuldade em responder esta pergunta é a \*\*dimensionalidade\*\*. O desafio é exibir a relação entre duas variáveis numéricas (\`price\`, \`carat\`) e, ao mesmo tempo, considerar o impacto de três variáveis categóricas (\`cut\`, \`color\`, \`clarity\`). Com 5 tipos de corte, 7 cores e 8 níveis de clareza, temos 280 combinações únicas. Tentar exibir todas elas de uma vez, seja com cores, símbolos ou facetas, resultaria em uma visualização caótica, ilegível e computacionalmente pesada. A estratégia de simplificar o problema comparando os dois grupos de "melhor" e "pior" qualidade foi a solução mais eficiente para superar essa dificuldade e ainda assim responder à pergunta central.
+
+\### A relação entre preço e peso é a mesma para diferentes configurações?
+
+Não, a relação entre preço e peso é fundamentalmente diferente para as diversas configurações de diamantes. O gráfico demonstra isso ao comparar os dois extremos: diamantes de **Melhor Qualidade** (pontos azuis) exibem uma relação exponencial íngreme, onde o preço dispara verticalmente mesmo com pequenos aumentos de peso (a maioria abaixo de 1.0 quilate). Em contraste, diamantes de **Pior Qualidade** (pontos vermelhos) mostram uma relação linear e "achatada", onde o preço sobe de forma lenta e gradual, mesmo para diamantes muito mais pesados (de 1.0 a 5.0 quilates). Essencialmente, a configuração de qualidade atua como um multiplicador que redefine completamente o impacto do peso no preço final.
