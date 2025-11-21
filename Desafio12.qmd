@@ -1,0 +1,136 @@
+---
+title: "Desafio12"
+author: "Matheus Vieira - 195245"
+format: html
+editor: visual
+---
+
+## Desafio12
+
+```{r}
+# 1. SETUP INICIAL: CARREGAMENTO DE PACOTES
+# ------------------------------------------------------------------------------
+# O Tidyverse (dplyr, ggplot2, etc.) é o equivalente mais próximo em R
+# das bibliotecas Pandas/Polars para manipulação de dados.
+# O pacote nycflights13 fornece o conjunto de dados 'flights' e 'airlines'.
+
+library(tidyverse)    # Pacotes essenciais: dplyr (manipulação), ggplot2 (visualização)
+library(nycflights13) # Dados sobre voos de 2013 em NYC
+
+# 2. CARREGAMENTO E PRÉ-PROCESSAMENTO DE DADOS
+# (Equivalente a pd.read_csv() ou pl.read_csv())
+# ------------------------------------------------------------------------------
+cat("\n--- 2. CARREGAMENTO E PRÉ-PROCESSAMENTO ---\n")
+
+# Carregando o data frame 'flights'
+dados_brutos <- flights
+
+# Remoção de valores ausentes (NA) nas variáveis de atraso,
+# uma prática comum antes da análise e modelagem.
+dados_limpos <- dados_brutos %>%
+  filter(!is.na(dep_delay) & !is.na(arr_delay))
+
+cat(paste("Número de observações após a limpeza:", nrow(dados_limpos), "\n"))
+
+
+# 3. OPERAÇÕES BÁSICAS DE MANIPULAÇÃO (SELECT, FILTER, MUTATE)
+# (Equivalente a df.select(), df.filter() ou df.with_columns() no Polars)
+# ------------------------------------------------------------------------------
+cat("\n--- 3. OPERAÇÕES BÁSICAS (SELECT, FILTER, MUTATE) ---\n")
+
+# Usando o pipe (%>%) para encadear operações:
+dados_transformados <- dados_limpos %>%
+  # SELECT: Seleciona as colunas 'carrier', 'flight' e calcula a nova 'total_delay'
+  select(carrier, flight, dep_delay, arr_delay) %>%
+  # MUTATE: Cria uma nova coluna (total_delay)
+  mutate(
+    total_delay = dep_delay + arr_delay
+  ) %>%
+  # FILTER: Filtra voos com atraso total superior a 120 minutos (2 horas)
+  filter(total_delay > 120)
+
+cat("Visualizando os 5 primeiros voos com alto atraso total:\n")
+print(head(dados_transformados, 5))
+
+
+# 4. AGREGAÇÃO E AGRUPAMENTO (GROUP BY / SUMMARISE)
+# (Equivalente a df.group_by().agg() no Polars ou df.groupby().agg() no Pandas)
+# ------------------------------------------------------------------------------
+cat("\n--- 4. AGREGAÇÃO E AGRUPAMENTO (GROUP BY / SUMMARISE) ---\n")
+
+# Calcula o atraso médio de chegada e o número total de voos por companhia aérea.
+atraso_por_companhia <- dados_limpos %>%
+  # GROUP BY: Agrupa os dados pela coluna 'carrier' (companhia aérea)
+  group_by(carrier) %>%
+  # SUMMARISE: Calcula as estatísticas de resumo para cada grupo
+  summarise(
+    media_atraso_chegada = mean(arr_delay, na.rm = TRUE),
+    num_voos = n() # n() conta o número de linhas no grupo
+  ) %>%
+  # Ordena de forma descendente pelo atraso médio
+  arrange(desc(media_atraso_chegada)) %>%
+  ungroup() # Remove o agrupamento para operações futuras
+
+cat("Top 5 Companhias com maior atraso médio de chegada:\n")
+print(head(atraso_por_companhia, 5))
+
+
+# 5. COMBINAÇÃO DE TABELAS (JOIN)
+# (Equivalente a df1.join(df2) no Polars ou pd.merge(df1, df2) no Pandas)
+# ------------------------------------------------------------------------------
+cat("\n--- 5. COMBINAÇÃO DE TABELAS (JOIN) ---\n")
+
+# Juntar os dados agregados com a tabela 'airlines' para obter o nome completo da empresa.
+# A chave de junção é a coluna 'carrier'.
+dados_finais <- atraso_por_companhia %>%
+  left_join(nycflights13::airlines, by = "carrier") %>%
+  # Seleciona e renomeia colunas para melhor clareza
+  select(
+    nome_companhia = name,
+    media_atraso_chegada,
+    num_voos
+  ) %>%
+  # Filtra companhias com pelo menos 5000 voos para manter a robustez da análise
+  filter(num_voos >= 5000)
+
+cat("Top 3 Companhias (com nome completo) por atraso médio:\n")
+print(head(dados_finais, 3))
+
+
+# 6. VISUALIZAÇÃO DE DADOS (GGPLOT2)
+# (Equivalente a df.plot() ou bibliotecas como Matplotlib/Seaborn/Plotly em Python)
+# ------------------------------------------------------------------------------
+cat("\n--- 6. VISUALIZAÇÃO (GGPLOT2) ---\n")
+
+# Cria um gráfico de barras para visualizar o atraso médio de chegada por companhia.
+grafico_atraso <- dados_finais %>%
+  # Garante que o nome da companhia seja tratado como fator ordenado pelo atraso
+  mutate(nome_companhia = fct_reorder(nome_companhia, media_atraso_chegada)) %>%
+  # Inicia o gráfico ggplot com o mapeamento (aes)
+  ggplot(aes(x = nome_companhia, y = media_atraso_chegada)) +
+  # Adiciona a geometria de barras
+  geom_col(fill = "#0072B2") +
+  # Adiciona os valores nas barras
+  geom_text(aes(label = round(media_atraso_chegada, 1)), vjust = -0.5, size = 3) +
+  # Ajusta as coordenadas para virar o gráfico (facilita a leitura dos nomes)
+  coord_flip() +
+  # Rótulos e Título
+  labs(
+    title = "Atraso Médio de Chegada por Companhia Aérea",
+    subtitle = "(Apenas companhias com mais de 5000 voos)",
+    x = "Companhia Aérea",
+    y = "Atraso Médio de Chegada (Minutos)"
+  ) +
+  theme_minimal()
+
+# O comando 'print' é necessário para exibir o gráfico no RStudio.
+print(grafico_atraso)
+
+cat("\nO gráfico 'grafico_atraso' foi gerado e está pronto para ser visualizado.\n")
+
+
+# 7. COMANDO PARA GERAR O HORÁRIO FINAL
+# ------------------------------------------------------------------------------
+cat("\n--- 7. DATA E HORA DE CONCLUSÃO DO SCRIPT ---\n")
+print(paste("Script concluído em:", Sys.time()))
+```

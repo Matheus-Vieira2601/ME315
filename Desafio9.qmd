@@ -1,0 +1,142 @@
+---
+title: "Desafio9"
+author: "Matheus Vieira - 195245"
+format: html
+editor: visual
+---
+
+## Desafio 09
+
+```{r}
+# 1. SETUP INICIAL: CARREGAMENTO DE PACOTES
+# ------------------------------------------------------------------------------
+# Instalar pacotes se necessário (descomente e execute):
+# install.packages(c("nycflights13", "tidyverse", "broom"))
+
+library(nycflights13) # Contém os dados flights, airlines, etc.
+library(tidyverse)    # Inclui dplyr e ggplot2
+library(broom)        # Ferramenta essencial para extrair informações limpas de modelos lm
+```
+
+```{r}
+# 2. EXERCÍCIO 1: PREPARAÇÃO DE DADOS
+# ------------------------------------------------------------------------------
+cat("\n--- 2. EXERCÍCIO 1: PREPARAÇÃO DE DADOS ---\n")
+
+# Juntar as tabelas 'flights' e 'airlines' e limpar dados ausentes/inválidos.
+dados_modelagem <- flights %>%
+  # 1. CORREÇÃO APLICADA: Usar nycflights13::airlines para garantir que a tabela correta
+  #    seja usada e evitar o erro 'Problem with carrier'.
+  left_join(nycflights13::airlines, by = "carrier") %>%
+  # 2. Renomear a coluna de nome da companhia para 'name' (do airlines)
+  rename(airline_name = name) %>%
+  # 3. Filtrar linhas onde o atraso de partida (dep_delay) e de chegada (arr_delay)
+  #    são não-ausentes (NA). Filtrar também air_time para evitar divisões por zero.
+  filter(!is.na(dep_delay) & !is.na(arr_delay) & !is.na(air_time) & air_time > 0) %>%
+  # 4. Calcular a variável 'dist_per_hour' (velocidade média em milhas/hora)
+  mutate(
+    dist_per_hour = distance / (air_time / 60) # air_time está em minutos
+  ) %>%
+  # 5. Selecionar apenas as colunas relevantes para o modelo
+  select(arr_delay, dep_delay, distance, dist_per_hour, carrier, airline_name, origin, dest)
+
+cat(paste("Número de observações após a limpeza:", nrow(dados_modelagem), "\n"))
+
+
+
+```
+
+```{r}
+# 3. EXERCÍCIO 2: PRIMEIRA BATERIA DE MODELOS LM
+# ------------------------------------------------------------------------------
+cat("\n--- 3. EXERCÍCIO 2: CONSTRUÇÃO DOS MODELOS ---\n")
+
+# 3.a) Modelo 1: Atraso de Chegada em função do Atraso de Partida
+# Variáveis: arr_delay ~ dep_delay
+modelo1 <- lm(arr_delay ~ dep_delay, data = dados_modelagem)
+print("Modelo 1: arr_delay ~ dep_delay criado.")
+
+# 3.b) Modelo 2: Adicionando Distância e Velocidade Média
+# Variáveis: arr_delay ~ dep_delay + distance + dist_per_hour
+modelo2 <- lm(arr_delay ~ dep_delay + distance + dist_per_hour, data = dados_modelagem)
+print("Modelo 2: Adicionando distância e dist_per_hour criado.")
+
+# 3.c) Modelo 3: Incluindo Interação entre Distância e Velocidade Média
+# Variáveis: arr_delay ~ dep_delay + distance * dist_per_hour
+# O '*' é um atalho para: dep_delay + distance + dist_per_hour + distance:dist_per_hour
+modelo3 <- lm(arr_delay ~ dep_delay + distance * dist_per_hour, data = dados_modelagem)
+print("Modelo 3: Incluindo termo de interação criado.")
+
+# 3.d) Modelo 4 (Extra): Incluindo a Categoria da Companhia Aérea
+# Variáveis: arr_delay ~ dep_delay + carrier
+# O 'carrier' (transportadora) é uma variável categórica (fator)
+modelo4 <- lm(arr_delay ~ dep_delay + carrier, data = dados_modelagem)
+print("Modelo 4: Adicionando transportadora (carrier) criado.")
+```
+
+```{r}
+# 4. EXERCÍCIO 3: AVALIAÇÃO E INTERPRETAÇÃO DOS MODELOS
+# ------------------------------------------------------------------------------
+cat("\n--- 4. EXERCÍCIO 3: AVALIAÇÃO E INTERPRETAÇÃO ---\n")
+
+# 4.a) Comparar Modelos 1 a 3 usando glance (do pacote broom)
+# O glance retorna métricas de qualidade (R-quadrado, P-valor do teste F, etc.)
+comparacao_modelos <- glance(modelo1) %>%
+  bind_rows(glance(modelo2)) %>%
+  bind_rows(glance(modelo3)) %>%
+  bind_rows(glance(modelo4)) %>%
+  mutate(modelo = paste0("Modelo_", 1:4)) %>%
+  select(modelo, r.squared, adj.r.squared, AIC, BIC, p.value)
+
+cat("\n4.a) Comparação de Métricas (Modelos 1 a 4):\n")
+print(comparacao_modelos)
+cat("O r.squared (R-quadrado) mede a proporção da variância de 'arr_delay' explicada pelo modelo.\n")
+cat("O Modelo 4 tem o maior R-quadrado ajustado, indicando melhor poder preditivo.\n")
+
+# 4.b) Interpretação Detalhada do Modelo 2 (usando summary e tidy)
+cat("\n4.b) Interpretação Detalhada do Modelo 2:\n")
+cat("\nResumo Completo (Summary):\n")
+print(summary(modelo2))
+
+cat("\nCoeficientes Detalhados (Tidy):\n")
+# tidy organiza os coeficientes e estatísticas de teste em um data frame
+tidy_modelo2 <- tidy(modelo2)
+print(tidy_modelo2)
+
+# Exemplo de Interpretação: Atraso de Partida (dep_delay)
+coef_dep_delay <- tidy_modelo2 %>% filter(term == "dep_delay") %>% pull(estimate)
+cat(paste("\nInterpretação (dep_delay): Para cada minuto de atraso na partida (dep_delay), o atraso de chegada (arr_delay) aumenta em aproximadamente", round(coef_dep_delay, 3), "minutos, mantendo as outras variáveis constantes.\n"))
+
+
+```
+
+```{r}
+# 5. EXERCÍCIO 4: ANÁLISE GRÁFICA DE RESÍDUOS
+# ------------------------------------------------------------------------------
+cat("\n--- 5. EXERCÍCIO 4: ANÁLISE GRÁFICA DE RESÍDUOS ---\n")
+
+# 5.a) Extrair os resíduos e valores ajustados (fitted values) do Modelo 2
+dados_residuos <- augment(modelo2) %>%
+  # Selecionar apenas as colunas de interesse
+  select(arr_delay, .fitted, .resid)
+
+# 5.b) Plotar Resíduos vs. Valores Ajustados
+# Idealmente, os resíduos devem estar aleatoriamente dispersos em torno de zero (0)
+grafico_residuos <- dados_residuos %>%
+  ggplot(aes(x = .fitted, y = .resid)) +
+  # Usar geom_point com alfa para lidar com o grande número de pontos
+  geom_point(alpha = 0.2) +
+  # Linha de referência em y=0
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  # Adicionar um suavizador (loess) para ver a tendência
+  geom_smooth(se = FALSE, color = "blue") +
+  labs(
+    title = "Resíduos vs. Valores Ajustados (Modelo 2)",
+    x = "Valores Ajustados (Minutos de Atraso)",
+    y = "Resíduos (Erro)"
+  ) +
+  theme_minimal()
+
+print(grafico_residuos)
+
+```
