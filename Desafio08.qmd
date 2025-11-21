@@ -1,0 +1,144 @@
+---
+title: "Desafio08"
+author: "Matheus Vieira - 195245"
+format: html
+editor: visual
+---
+
+## Desafio 08
+
+```{r}
+# 1. SETUP INICIAL: INSTALAÇÃO E CARREGAMENTO DE PACOTES
+# ------------------------------------------------------------------------------
+# Instalar pacotes se necessário (descomente e execute):
+# install.packages(c("RSQLite", "tidyverse", "dbplyr", "nycflights13"))
+
+library(RSQLite)
+library(tidyverse)
+library(dbplyr)
+library(nycflights13)
+
+# Definir o nome do arquivo de banco de dados SQLite que será criado
+DB_FILE <- "nycflights.sqlite"
+```
+
+```{r}
+# 2. EXERCÍCIO 1: CRIAÇÃO DO BANCO DE DADOS E CARREGAMENTO DAS TABELAS
+# ------------------------------------------------------------------------------
+cat("\n--- EXERCÍCIO 1: CRIANDO O BANCO DE DADOS E TABELAS ---\n")
+
+# Se o arquivo de BD já existir, remover para garantir um novo início
+if (file.exists(DB_FILE)) {
+  file.remove(DB_FILE)
+  print(paste("Arquivo antigo", DB_FILE, "removido."))
+}
+
+# 2.1 Conectar ao banco de dados SQLite (ele será criado se não existir)
+nyc_db <- dbConnect(SQLite(), DB_FILE)
+print(paste("Conexão com o BD", DB_FILE, "estabelecida."))
+
+
+# 2.2 Carregar as tabelas do R para o SQLite usando copy_to()
+# Esta função é a forma recomendada do dbplyr para transferir data frames
+# para o banco de dados.
+copy_to(nyc_db, nycflights13::flights, "flights_tbl", temporary = FALSE, overwrite = TRUE)
+copy_to(nyc_db, nycflights13::airlines, "airlines_tbl", temporary = FALSE, overwrite = TRUE)
+copy_to(nyc_db, nycflights13::airports, "airports_tbl", temporary = FALSE, overwrite = TRUE)
+
+# Verificar as tabelas criadas no banco
+cat("\nTabelas no banco de dados 'nycflights.sqlite':\n")
+print(dbListTables(nyc_db))
+```
+
+```{r}
+# 3. EXERCÍCIO 2: DESTINO DO VOO COM MAIOR DISTÂNCIA
+# ------------------------------------------------------------------------------
+cat("\n--- EXERCÍCIO 2: DESTINO DO VOO MAIS LONGO ---\n")
+
+# 3.1 Criar a referência (tbl) para a tabela de voos no banco de dados
+flights_db <- tbl(nyc_db, "flights_tbl")
+
+# 3.2 Executar a consulta usando sintaxe dplyr
+resultado_voo_mais_longo <- flights_db %>%
+  # Ordenar de forma descendente pela distância
+  arrange(desc(distance)) %>%
+  # Selecionar apenas as colunas de interesse
+  select(carrier, flight, dest, distance) %>%
+  # Pegar apenas o primeiro registro (o mais longo)
+  head(1) %>%
+  # Trazer o resultado para o R (data frame local)
+  collect()
+
+cat("Resultado (Voo com a maior distância):\n")
+print(resultado_voo_mais_longo)
+
+# 3.3 Visualizar o comando SQL que foi gerado pelo dbplyr
+cat("\nComando SQL gerado (show_query):\n")
+flights_db %>%
+  arrange(desc(distance)) %>%
+  select(carrier, flight, dest, distance) %>%
+  head(1) %>%
+  show_query()
+```
+
+```{r}
+# 4. EXERCÍCIO 3: TOP 5 DESTINOS COM MAIS VOOS
+# ------------------------------------------------------------------------------
+cat("\n\n--- EXERCÍCIO 3: TOP 5 DESTINOS COM MAIS VOOS (CORRIGIDO) ---\n")
+
+top_5_destinos <- flights_db %>%
+  # Agrupar por destino
+  group_by(dest) %>%
+  # **CORREÇÃO:** Usar summarise() para nomear a coluna de contagem explicitamente
+  summarise(num_voos = n()) %>%
+  # Ordenar de forma descendente (substitui count(sort=TRUE))
+  arrange(desc(num_voos)) %>%
+  # Selecionar os 5 primeiros
+  head(5) %>%
+  # Trazer o resultado para o R
+  collect()
+
+cat("Top 5 Destinos com mais voos:\n")
+print(top_5_destinos)
+```
+
+```{r}
+# 5. EXERCÍCIO 4: NÚMERO DE VOOS POR AEROPORTO DE ORIGEM
+# ------------------------------------------------------------------------------
+cat("\n--- EXERCÍCIO 4: VOOS POR AEROPORTO DE ORIGEM ---\n")
+
+voos_por_origem <- flights_db %>%
+  # Agrupar pela coluna de origem (origin)
+  group_by(origin) %>%
+  # Contar os voos em cada grupo
+  count() %>%
+  rename(num_voos = n) %>%
+  # Ordenar para melhor visualização (opcional, mas recomendado)
+  arrange(desc(num_voos)) %>%
+  # Trazer o resultado para o R
+  collect()
+
+cat("Contagem de voos por aeroporto de origem:\n")
+print(voos_por_origem)
+```
+
+```{r}
+# 6. LIMPEZA E ENCERRAMENTO
+# ------------------------------------------------------------------------------
+cat("\n--- 6. LIMPEZA E ENCERRAMENTO ---\n")
+
+# Fechar a conexão com o banco de dados
+dbDisconnect(nyc_db)
+print("Conexão com o banco de dados fechada.")
+
+# Remover o arquivo do banco de dados SQLite
+file.remove(DB_FILE)
+print(paste("Arquivo", DB_FILE, "removido."))
+```
+
+```{r}
+# 7. INFORMAÇÃO ADICIONAL: DATA E HORA DE CONCLUSÃO DO SCRIPT
+# ------------------------------------------------------------------------------
+cat("\n--- 7. DATA E HORA DE CONCLUSÃO DO SCRIPT ---\n")
+print(paste("Script concluído em:", Sys.time()))
+```
