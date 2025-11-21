@@ -1,0 +1,286 @@
+---
+title: "Desafio07"
+author: "Matheus Vieira - 195245"
+format: html
+editor: visual
+---
+
+## Desafio 7
+
+```{r}
+SOURCE_PATH <- "dados/"
+DB_FILE_ORIGINAL <- paste0(SOURCE_PATH, "disco.db")
+DB_FILE_COPY <- "discoCopy.db"
+```
+
+```{r}
+# 1. SETUP INICIAL: CARREGAMENTO DE PACOTES
+# ------------------------------------------------------------------------------
+# Os pacotes 'tidyverse' inclui 'dplyr', e 'dbplyr' será necessário mais tarde.
+library(RSQLite)
+library(tidyverse)
+library(dbplyr)
+```
+
+```{r}
+# 2. CONEXÃO COM O BANCO DE DADOS (discoCopy.db)
+# ------------------------------------------------------------------------------
+# Cria uma cópia do banco de dados original 'disco.db' para modificação.
+cat("\n--- 2. CONEXÃO COM O BD 'discoCopy.db' ---\n")
+
+# Verifica se o arquivo original existe antes de tentar copiar
+if (!file.exists(DB_FILE_ORIGINAL)) {
+  stop(paste("ERRO FATAL: Arquivo de banco de dados original não encontrado em:", DB_FILE_ORIGINAL, "\nPor favor, verifique a variável 'SOURCE_PATH' no início do script."))
+}
+
+# Cria a cópia de trabalho no diretório atual se ela ainda não existir
+if(!file.exists(DB_FILE_COPY)) {
+  # Copia o arquivo original para o diretório de trabalho atual.
+  file.copy(DB_FILE_ORIGINAL, DB_FILE_COPY)
+  print(paste("Cópia do banco de dados criada:", DB_FILE_COPY))
+}
+
+# Conecta ao banco de dados que será modificado (usando o arquivo no diretório atual)
+db <- dbConnect(SQLite(), DB_FILE_COPY)
+print(paste("Conexão 'db' criada com sucesso para:", DB_FILE_COPY))
+
+```
+
+```{r}
+# 3. CRIAÇÃO E REMOÇÃO DE TABELAS (CREATE TABLE / DROP TABLE)
+# ------------------------------------------------------------------------------
+# Lista as tabelas existentes (Slide 4)
+cat("\n--- 3.1 Tabelas antes da criação ---\n")
+print(dbListTables(db))
+
+# Executa o comando SQL para criar a tabela 'instruments' (Slide 4)
+cat("\n--- 3.2 Criando a tabela 'instruments' ---\n")
+dbExecute(db, "CREATE TABLE instruments
+  (AlbumId INTEGER,
+   TrackId INTEGER,
+   ElectricGuitar INTEGER,
+   Singer INTEGER,
+   Trumpet INTEGER)")
+
+# Lista os campos da nova tabela (Slide 5)
+cat("\n--- 3.3 Campos da tabela 'instruments' ---\n")
+print(dbListFields(db, 'instruments'))
+
+# Remove a tabela 'instruments' (Slide 5)
+cat("\n--- 3.4 Removendo a tabela 'instruments' ---\n")
+dbExecute(db, "DROP TABLE instruments")
+print("Tabela 'instruments' removida.")
+```
+
+```{r}
+# 4. BEST PRACTICES: PREVENÇÃO CONTRA SQL INJECTION (Slide 6-7)
+# ------------------------------------------------------------------------------
+# Demonstra o método seguro usando placeholders (?) com dbSendQuery/dbBind
+cat("\n--- 4. EXECUTANDO QUERY DE FORMA SEGURA ---\n")
+
+# Re-criando a tabela 'instruments' para os exemplos de inserção (implícito)
+dbExecute(db, "CREATE TABLE instruments
+  (AlbumId INTEGER,
+   TrackId INTEGER,
+   ElectricGuitar INTEGER,
+   Singer INTEGER,
+   Trumpet INTEGER)")
+
+# PASSO 1: Enviar query com placeholder para ArtistId
+sql_artist <- paste("SELECT ArtistId FROM artists", "WHERE Name = ?")
+query <- dbSendQuery(db, sql_artist)
+dbBind (query, list("Gilberto Gil"))
+aId <- dbFetch (query)
+dbClearResult(query)
+print(paste("ArtistId de Gilberto Gil (seguro):", aId$ArtistId))
+
+# PASSO 2: Usar o ID para buscar álbuns (exemplo de como usar aId)
+sql_albums <- paste ('SELECT Title FROM albums', 'WHERE ArtistId = ', aId$ArtistId)
+album_titles <- dbGetQuery(db, sql_albums)
+print("Álbuns encontrados:")
+print(album_titles)
+
+```
+
+```{r}
+# 5. INSERÇÃO DE LINHAS EM UMA TABELA (INSERT INTO)
+# ------------------------------------------------------------------------------
+# A tabela 'instruments' foi recriada no passo 4.
+cat("\n--- 5.1 Buscando faixas do Álbum 85 ---\n")
+sql_tracks <- paste ('SELECT TrackId, Name FROM tracks', 'WHERE AlbumId = 85')
+dbGetQuery(db, sql_tracks) %>% head()
+
+# Insere linhas na tabela 'instruments' (Slide 9)
+cat("\n--- 5.2 Inserindo 2 linhas em 'instruments' ---\n")
+dbExecute (db, "INSERT INTO instruments
+  VALUES
+  ('85', '1075', 0, 1, 0),
+  ('85', '1078', 0, 1, 0); ")
+
+# Consulta o conteúdo inserido (Slide 9)
+cat("\n--- 5.3 Conteúdo atual da tabela 'instruments' ---\n")
+dbGetQuery(db, "SELECT * FROM instruments")
+```
+
+```{r}
+# 6. INSERÇÃO DE DATA FRAMES (dbWriteTable)
+# ------------------------------------------------------------------------------
+# Insere o data frame 'mtcars' no BD (Slide 10)
+cat("\n--- 6.1 Inserindo 'mtcars' (tabela nova) ---\n")
+dbWriteTable (db, "mtcars", mtcars)
+dbListTables (db) # Verifica se 'mtcars' foi adicionado
+
+# Consulta e exibe as primeiras linhas da nova tabela (Slide 10)
+cat("\n--- 6.2 Primeiras 3 linhas da tabela 'mtcars' no BD ---\n")
+dbGetQuery(db, "SELECT * FROM mtcars") %>% head(3)
+```
+
+```{r}
+# 7. INSERÇÃO COM APPEND (Adicionando linhas)
+# ------------------------------------------------------------------------------
+cat("\n--- 7. Inserindo a média de 'mtcars' (APPEND) ---\n")
+
+# Calcula a média (Slide 11)
+theAvgCar <- mtcars %>%
+  summarise_all(function(x) round (mean(x), 2))
+print("Data frame 'theAvgCar':")
+print(theAvgCar)
+
+# Adiciona a linha de média à tabela 'mtcars' existente (Slide 11)
+dbWriteTable (db, "mtcars", theAvgCar, append = TRUE)
+
+# Verifica as últimas 3 linhas (a última deve ser a média) (Slide 11)
+cat("\n--- Últimas 3 linhas de 'mtcars' (incluindo a média) ---\n")
+dbGetQuery(db, "SELECT * FROM mtcars") %>% tail(3)
+```
+
+```{r}
+# 8. INSERÇÃO COM OVERWRITE (Sobrescrevendo a tabela)
+# ------------------------------------------------------------------------------
+cat("\n--- 8. Inserindo 'mtcars' com OVERWRITE ---\n")
+# Sobrescreve a tabela 'mtcars' com o data frame original (Slide 12)
+dbWriteTable (db, "mtcars", mtcars, overwrite = TRUE)
+
+# Verifica as últimas 3 linhas (a linha da média deve ter sumido) (Slide 12)
+cat("\n--- Últimas 3 linhas de 'mtcars' (após OVERWRITE) ---\n")
+dbGetQuery(db, "SELECT * FROM mtcars") %>% tail(3)
+```
+
+```{r}
+# 9. LENDO EM CHUNKS (dbSendQuery / dbFetch)
+# ------------------------------------------------------------------------------
+cat("\n--- 9. Lendo a tabela 'mtcars' em CHUNKS (n=5) ---\n")
+res <- dbSendQuery(db, "SELECT * FROM mtcars WHERE cyl = 4")
+
+# Loop para buscar 5 linhas de cada vez e imprimir a contagem
+while(!dbHasCompleted(res)) {
+  chunk <- dbFetch (res, n=5)
+  print(paste("Linhas no chunk:", nrow (chunk)))
+}
+
+dbClearResult(res) # Limpa o resultado da consulta (Slide 13)
+```
+
+```{r}
+# 10. FECHANDO CONEXÃO E REMOVENDO ARQUIVOS (dbDisconnect)
+# -------------------------------------------------------------------------------
+cat("\n--- 10. Fechando conexão e limpando 'discoCopy.db' ---\n")
+dbDisconnect(db) # Desconecta de 'discoCopy.db' (Slide 14)
+
+# Remove o arquivo de trabalho.
+if(file.exists(DB_FILE_COPY)) {
+  file.remove(DB_FILE_COPY)
+  print(paste("Arquivo de cópia de trabalho (", DB_FILE_COPY, ") removido."))
+} else {
+  print(paste("Arquivo de cópia de trabalho (", DB_FILE_COPY, ") já havia sido removido."))
+}
+```
+
+```{r}
+# 11. CRIANDO UMA NOVA BASE DE DADOS (air.db)
+# -------------------------------------------------------------------------------
+# Este bloco requer os arquivos CSV: 'airports.csv' e 'airlines.csv'.
+cat("\n--- 11. Criando um novo BD 'air.db' ---\n")
+DB_AIR_FILE <- "air.db"
+AIRPORTS_FILE <- paste0(SOURCE_PATH, "airports.csv")
+AIRLINES_FILE <- paste0(SOURCE_PATH, "airlines.csv")
+
+tryCatch({
+  # Verificação de arquivos CSV
+  if (!file.exists(AIRPORTS_FILE) || !file.exists(AIRLINES_FILE)) {
+     stop("Arquivos CSV de airports/airlines não encontrados. Verifique 'SOURCE_PATH'.")
+  }
+
+  # Lendo arquivos CSV (Slide 15)
+  airports <- read_csv(AIRPORTS_FILE, col_types = "cccccdd", show_col_types = FALSE)
+  airlines <- read_csv(AIRLINES_FILE, col_types = "cc", show_col_types = FALSE)
+
+  # Conecta ou cria o BD 'air.db' (Slide 15)
+  air <- dbConnect (SQLite(), dbname=DB_AIR_FILE)
+
+  # Escreve os data frames no BD (Slide 15)
+  dbWriteTable (air, name = "airports", airports)
+  dbWriteTable (air, name = "airlines", airlines)
+
+  # Lista as novas tabelas (Slide 15)
+  cat("\n--- Tabelas no novo BD 'air.db' ---\n")
+  print(dbListTables(air))
+
+  # Destroi a conexão e o arquivo (Slide 16)
+  dbDisconnect(air)
+  if(file.exists(DB_AIR_FILE)) {
+    file.remove(DB_AIR_FILE)
+    print(paste("Arquivo 'air.db' removido e conexão 'air' fechada."))
+  }
+}, error = function(e) {
+  print(paste("AVISO: Falha ao executar o bloco 'air.db'. Erro:", e$message))
+})
+```
+
+```{r}
+# 12. INTRODUÇÃO AO DPLYR E DBPLYR (Slide 17-20)
+# -------------------------------------------------------------------------------
+cat("\n--- 12. DPLYR e DBPLYR: Conectando ao BD original ---\n")
+# Conecta ao BD original (disco.db) para uso com dbplyr (Slide 17)
+tryCatch({
+  # Verifica se o arquivo original existe antes de tentar conectar
+  if (!file.exists(DB_FILE_ORIGINAL)) {
+    stop("Arquivo 'disco.db' original não encontrado para o dbplyr. Verifique 'SOURCE_PATH'.")
+  }
+
+  db_plyr <- dbConnect (SQLite(), DB_FILE_ORIGINAL)
+
+  # Cria uma referência 'lazy' (tbl) para a tabela 'tracks' (Slide 17)
+  tracks <- tbl (db_plyr, "tracks")
+
+  # Exibe a referência e as primeiras linhas (lazy query) (Slide 17)
+  cat("\n--- Visualizando a referência 'lazy' de 'tracks' ---\n")
+  tracks %>% head (3) %>% print()
+
+  # Realiza operações de agrupamento e resumo (summarise) (Slide 18)
+  meanTracks <- tracks %>%
+    group_by (AlbumId) %>%
+    summarise (AvLen = mean (Milliseconds, na.rm = TRUE),
+               AvCost = mean (UnitPrice, na.rm = TRUE))
+
+  print(meanTracks) # Exibe o objeto (note que é uma consulta pendente)
+
+  # Mostra o comando SQL que será executado (show_query) (Slide 19)
+  cat("\n--- Comando SQL gerado pelo dbplyr (show_query) ---\n")
+  meanTracks %>% show_query()
+
+  # Executa a consulta e traz os dados para o R (collect) (Slide 20)
+  cat("\n--- Coletando os dados (collect) ---\n")
+  mT <- meanTracks %>% collect()
+  print("Data Frame coletado ('mT'):")
+  print(mT)
+
+  # Fecha a conexão dbplyr (Slide 20)
+  dbDisconnect(db_plyr)
+  print("\nConexão db_plyr fechada.")
+
+}, error = function(e) {
+  print(paste("AVISO: Falha ao executar o bloco 'dbplyr'. Erro:", e$message))
+})
+
+```

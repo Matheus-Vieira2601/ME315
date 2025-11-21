@@ -1,0 +1,66 @@
+---
+title: "Desafio 3"
+author: "Matheus Vieira - 195245"
+format: html
+editor: visual
+---
+
+## Desafio 3
+
+```{r}
+# Carregamento dos pacotes
+library(arrow)
+library(jsonlite)
+```
+
+```{r}
+# Criar um data frame de exemplo
+df_parquet_exemplo <- data.frame(
+  ID = 1:3,
+  Produto = c("A", "B", "C"),
+  Preco = c(10.50, 25.99, 5.00)
+)
+
+# Salvar o data frame como um arquivo Parquet temporário
+write_parquet(df_parquet_exemplo, "dados_exemplo.parquet")
+
+# --- PASSO 2.2: CARREGAMENTO DO ARQUIVO PARQUET NO R ---
+# Carregar o arquivo Parquet de volta para um data frame R
+df_parquet <- read_parquet("dados_exemplo.parquet")
+
+# Exibir as primeiras linhas e a estrutura para confirmação
+print("Data Frame Carregado de Parquet:")
+print(head(df_parquet))
+print(str(df_parquet))
+
+# Limpar o arquivo de exemplo
+file.remove("dados_exemplo.parquet")
+```
+
+```{r}
+# Criar um data frame de exemplo
+df_json_exemplo <- data.frame(
+  Cidade = c("Sao Paulo", "Rio de Janeiro", "Curitiba"),
+  Populacao = c(12.3, 6.7, 1.9), # em milhões
+  Capital = c(TRUE, FALSE, TRUE)
+)
+
+# Converter o data frame em uma string JSON (formato de array de objetos)
+json_string <- toJSON(df_json_exemplo, pretty = TRUE)
+
+# Salvar a string JSON em um arquivo temporário
+write(json_string, "dados_exemplo.json")
+
+# --- PASSO 3.2: CARREGAMENTO DO ARQUIVO JSON NO R ---
+# Carregar o arquivo JSON de volta para um data frame R
+# A função 'fromJSON' lida com a conversão de forma eficiente
+df_json <- fromJSON("dados_exemplo.json")
+
+# Exibir as primeiras linhas e a estrutura para confirmação
+print("Data Frame Carregado de JSON:")
+print(head(df_json))
+print(str(df_json))
+
+# Limpar o arquivo de exemplo
+file.remove("dados_exemplo.json")
+```

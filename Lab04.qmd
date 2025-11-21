@@ -88,11 +88,11 @@ fig.show()
 
 Para garantir um gráfico de boa qualidade, tomei cinco ações principais para lidar com o grande volume de dados e melhorar a clareza:
 
-1. \*\*Amostragem Aleatória:\*\* O conjunto de dados original tem mais de 50.000 pontos. Plotar todos eles resultaria em um gráfico "borrado" e lento (problema de \*overplotting\*). Criei uma amostra aleatória de 7.000 pontos, que é grande o suficiente para revelar a tendência, mas limpa o suficiente para ser legível.
-2. \*\*Transparência (Opacidade):\*\* Defini a opacidade dos pontos para \`0.2\`. Isso permite ver a densidade dos dados, mostrando as áreas onde a concentração de diamantes é maior, algo que seria impossível de ver com pontos opacos.
-3. \*\*Rótulos Claros:\*\* O gráfico possui um título principal e rótulos nos eixos X e Y (\`Peso do Diamante (Carat)\` e \`Preço (em USD)\`) que o tornam autoexplicativo.
-4. \*\*Interatividade (Hover Data):\*\* Utilizei \`plotly\`, que é interativo. Configurei o gráfico para que, ao passar o mouse sobre um ponto, ele revele informações cruciais (\`cut\`, \`color\`, \`clarity\`). Isso permite uma exploração mais profunda, ajudando a entender \*por que\* dois diamantes com o mesmo peso podem ter preços tão diferentes.
-5. \*\*Ferramenta Adequada:\*\* Escolhi um gráfico de dispersão (\`scatter plot\`), que é a visualização padrão e mais eficaz para investigar a associação entre duas variáveis numéricas contínuas.
+1.  \*\*Amostragem Aleatória:\*\* O conjunto de dados original tem mais de 50.000 pontos. Plotar todos eles resultaria em um gráfico "borrado" e lento (problema de \*overplotting\*). Criei uma amostra aleatória de 7.000 pontos, que é grande o suficiente para revelar a tendência, mas limpa o suficiente para ser legível.
+2.  \*\*Transparência (Opacidade):\*\* Defini a opacidade dos pontos para \`0.2\`. Isso permite ver a densidade dos dados, mostrando as áreas onde a concentração de diamantes é maior, algo que seria impossível de ver com pontos opacos.
+3.  \*\*Rótulos Claros:\*\* O gráfico possui um título principal e rótulos nos eixos X e Y (\`Peso do Diamante (Carat)\` e \`Preço (em USD)\`) que o tornam autoexplicativo.
+4.  \*\*Interatividade (Hover Data):\*\* Utilizei \`plotly\`, que é interativo. Configurei o gráfico para que, ao passar o mouse sobre um ponto, ele revele informações cruciais (\`cut\`, \`color\`, \`clarity\`). Isso permite uma exploração mais profunda, ajudando a entender \*por que\* dois diamantes com o mesmo peso podem ter preços tão diferentes.
+5.  \*\*Ferramenta Adequada:\*\* Escolhi um gráfico de dispersão (\`scatter plot\`), que é a visualização padrão e mais eficaz para investigar a associação entre duas variáveis numéricas contínuas.
 
 ### Comunicando os Achados
 
